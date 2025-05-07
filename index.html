@@ -3,16 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Layered Canvas</title>
+    <title>Lofi Music Player</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Canvas layers would go here if still needed -->
     <div class="canvas-container">
         <canvas id="canvas-layer1"></canvas>
         <canvas id="canvas-layer2"></canvas>
         <canvas id="canvas-layer3"></canvas>
     </div>
 
-    <script src="script.js"></script>
+    <div id="audioPlayerContainer" class="audio-container">
+        <audio id="myAudio" preload="metadata"></audio>
+        <div id="songTitleDisplay" class="song-title"></div>
+
+        <button id="playPauseBtn" class="control-btn" aria-label="Play/Pause">
+            <div id="iconContainer" class="icon-play"></div>
+        </button>
+        <button id="nextBtn" class="control-btn" aria-label="Next Song">
+            <div class="icon-next"></div> <!-- Placeholder for next icon -->
+        </button>
+    </div>
+
+    <script type="module" src="script.js"></script>
+    <script src="audioPlayer.js"></script>
 </body>
 </html> 

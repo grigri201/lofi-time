@@ -1,181 +1,249 @@
-const canvas1 = document.getElementById('canvas-layer1');
-const ctx1 = canvas1.getContext('2d');
-const canvas2 = document.getElementById('canvas-layer2');
-const ctx2 = canvas2.getContext('2d'); // For future use
-const canvas3 = document.getElementById('canvas-layer3');
-const ctx3 = canvas3.getContext('2d');
+import { initializeRain, updateRainState, drawRainOnCanvas, initializeLightning, drawLightning, clearLightning } from './rain.js';
+import { initializeMeteors, updateMeteorsState, drawMeteorsOnCanvas, clearMeteors } from './meteor.js';
 
-const img1 = new Image();
-const img3 = new Image();
-
-let bgLayer1Loaded = false;
-let bgLayer2Loaded = false;
-
-let rainDrops = [];
-const NUM_DROPS = 300; // Number of raindrops
-let animationFrameId = null;
-
-img1.onload = function () {
-  bgLayer1Loaded = true;
-  if (bgLayer2Loaded) {
-    resizeAndDraw();
-    if (!animationFrameId) { // Start animation when both images loaded
-      animate();
+document.addEventListener('DOMContentLoaded', async () => {
+  let config;
+  try {
+    const response = await fetch('./config.json');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    config = await response.json();
+  } catch (error) {
+    console.error("Failed to load config.json:", error);
+    // Fallback or disable canvas features if config is essential
+    return;
   }
-};
-img1.src = './assets/bg-layer1.png'; // Updated path
 
-img3.onload = function () {
-  bgLayer2Loaded = true;
-  if (bgLayer1Loaded) {
-    resizeAndDraw();
-    if (!animationFrameId) { // Start animation when both images loaded
-      animate();
+  // Determine which theme/key to use from config.json
+  const themeKey = "night";
+  const themeConfig = config[themeKey];
+
+  // Validate themeConfig and essential paths
+  if (!themeConfig ||
+    !themeConfig.layer1 || !Array.isArray(themeConfig.layer1) || themeConfig.layer1.length === 0 ||
+    !themeConfig.layer2 || !Array.isArray(themeConfig.layer2) || themeConfig.layer2.length === 0) {
+    console.error(`Theme '${themeKey}' in config.json is missing layer1/layer2 arrays, or they are empty, or essential image paths are missing.`);
+    return;
+  }
+
+  const layer1ImagePaths = themeConfig.layer1;
+  const layer2ImagePaths = themeConfig.layer2; // for canvas3
+
+  const layer1TransformInterval = themeConfig.layer1_transform_interval || 0;
+  // const layer1TransformDuration = themeConfig.layer1_transform_duration || 0; // Parsed but not used for visual transition in this version
+  const layer2TransformInterval = themeConfig.layer2_transform_interval || 0;
+  // const layer2TransformDuration = themeConfig.layer2_transform_duration || 0; // Parsed but not used for visual transition in this version
+
+  // Moved Canvas related code inside DOMContentLoaded
+  const canvas1 = document.getElementById('canvas-layer1');
+  const canvas2 = document.getElementById('canvas-layer2');
+  const canvas3 = document.getElementById('canvas-layer3');
+
+  // Only proceed with canvas setup if all canvases are found
+  if (canvas1 && canvas2 && canvas3) {
+    const ctx1 = canvas1.getContext('2d');
+    const ctx2 = canvas2.getContext('2d');
+    const ctx3 = canvas3.getContext('2d');
+
+    // Image arrays, current indices, and loaded status
+    let layer1Images = [];
+    let currentLayer1Index = 0;
+    let layer1Loaded = false;
+
+    let layer2Images = []; // For canvas3 (formerly img3)
+    let currentLayer2Index = 0;
+    let layer2Loaded = false; // For canvas3 images
+
+    let initialSetupDone = false; // Flag to ensure initial setup runs once
+
+    let animationFrameId = null;
+
+    function loadLayerImages(paths, imageArray, onAllLoadedCallback) {
+      let loadedCount = 0;
+      if (!paths || paths.length === 0) {
+        onAllLoadedCallback(); // No images to load
+        return;
+      }
+      // Ensure imageArray is cleared or correctly sized if re-using
+      imageArray.length = 0;
+      paths.forEach((path, index) => {
+        const img = new Image();
+        img.onload = () => {
+          loadedCount++;
+          if (loadedCount === paths.length) {
+            onAllLoadedCallback();
+          }
+        };
+        img.onerror = () => {
+          console.error(`Failed to load image: ${path}`);
+          // Optionally, count as loaded to not block indefinitely, or handle error
+          loadedCount++;
+          if (loadedCount === paths.length) {
+            onAllLoadedCallback();
+          }
+        };
+        img.src = path;
+        imageArray[index] = img;
+      });
     }
-  }
-};
-img3.src = './assets/bg-layer2.png'; // Updated path
 
-function drawImageCover(ctx, img, canvas) {
-  const dpr = window.devicePixelRatio || 1;
-  const canvasLogicalWidth = canvas.width / dpr;
-  const canvasLogicalHeight = canvas.height / dpr;
+    function initialDrawAndSetup() {
+      if (initialSetupDone) return;
+      initialSetupDone = true;
 
-  const imgWidth = img.width;
-  const imgHeight = img.height;
+      resizeAndDraw(); // Draws initial images based on current indices (0)
 
-  const scaleX = canvasLogicalWidth / imgWidth;
-  const scaleY = canvasLogicalHeight / imgHeight;
-  const scale = Math.max(scaleX, scaleY); // Use the larger scale factor to cover
+      if (!animationFrameId && canvas2) { // Start rain animation on canvas2
+        animate();
+      }
 
-  const drawWidth = imgWidth * scale;
-  const drawHeight = imgHeight * scale;
+      // Start slideshow for layer 1 (canvas1)
+      if (layer1Images.length > 1 && layer1TransformInterval > 0 && ctx1) {
+        setInterval(() => {
+          currentLayer1Index = (currentLayer1Index + 1) % layer1Images.length;
+          if (layer1Images[currentLayer1Index]) {
+            drawImageCover(ctx1, layer1Images[currentLayer1Index], canvas1);
+          }
+        }, layer1TransformInterval);
+      }
 
-  // Center the image
-  const offsetX = (canvasLogicalWidth - drawWidth) / 2;
-  const offsetY = (canvasLogicalHeight - drawHeight) / 2;
-
-  ctx.clearRect(0, 0, canvasLogicalWidth, canvasLogicalHeight); // Clear canvas before drawing
-  ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
-}
-
-function createRainDrop(canvasLogicalWidth, canvasLogicalHeight) {
-  return {
-    x: Math.random() * canvasLogicalWidth,
-    y: Math.random() * canvasLogicalHeight, // Start at random y for initial fill
-    length: Math.random() * 20 + 10,
-    speed: Math.random() * 15 + 12, // Speed tripled: min 12, max 27 (previously 4 to 9)
-    opacity: Math.random() * 0.5 + 0.2 // Varying opacity
-  };
-}
-
-function initRain(canvas) {
-  rainDrops = [];
-  const dpr = window.devicePixelRatio || 1;
-  const logicalWidth = canvas.width / dpr;
-  const logicalHeight = canvas.height / dpr;
-  for (let i = 0; i < NUM_DROPS; i++) {
-    rainDrops.push(createRainDrop(logicalWidth, logicalHeight));
-  }
-}
-
-// This function now only draws the rain based on the rainDrops array
-function drawRain(ctx) { // canvas parameter is no longer needed if ctx is already scaled
-  ctx.lineCap = 'round';
-  rainDrops.forEach(drop => {
-    ctx.beginPath();
-    ctx.moveTo(drop.x, drop.y);
-    // Angled rain, adjust multiplier for more/less angle
-    ctx.lineTo(drop.x - drop.length / 5, drop.y + drop.length);
-    ctx.strokeStyle = `rgba(174, 194, 224, ${drop.opacity})`;
-    // Varying line width for a bit more realism, could also be a drop property
-    ctx.lineWidth = Math.random() * 1.5 + 0.5;
-    ctx.stroke();
-  });
-}
-
-function updateRain(canvas) {
-  const dpr = window.devicePixelRatio || 1;
-  const logicalWidth = canvas.width / dpr;
-  const logicalHeight = canvas.height / dpr;
-
-  rainDrops.forEach(drop => {
-    drop.y += drop.speed;
-    drop.x -= drop.speed / 5; // Adjust x for angled fall, consistent with drawRain lineTo
-
-    // If drop moves off bottom or too far left, reset it
-    if (drop.y > logicalHeight || drop.x < -drop.length) { // Check x boundary as well
-      drop.y = 0 - drop.length; // Reset to top, just above the screen
-      drop.x = Math.random() * logicalWidth; // New random x within canvas width
-      // Optionally, re-randomize other properties
-      drop.speed = Math.random() * 15 + 12; // Keep consistent with createRainDrop (tripled speed)
-      drop.opacity = Math.random() * 0.5 + 0.2;
+      // Start slideshow for layer 2 (canvas3)
+      if (layer2Images.length > 1 && layer2TransformInterval > 0 && ctx3) {
+        setInterval(() => {
+          currentLayer2Index = (currentLayer2Index + 1) % layer2Images.length;
+          if (layer2Images[currentLayer2Index]) {
+            drawImageCover(ctx3, layer2Images[currentLayer2Index], canvas3);
+          }
+        }, layer2TransformInterval);
+      }
     }
-  });
-}
 
-function animate() {
-  const dpr = window.devicePixelRatio || 1;
-  const logicalWidth2 = canvas2.width / dpr;
-  const logicalHeight2 = canvas2.height / dpr;
+    loadLayerImages(layer1ImagePaths, layer1Images, () => {
+      layer1Loaded = true;
+      if (layer2Loaded && !initialSetupDone) {
+        initialDrawAndSetup();
+      }
+    });
 
-  ctx2.clearRect(0, 0, logicalWidth2, logicalHeight2);
+    loadLayerImages(layer2ImagePaths, layer2Images, () => { // For canvas3
+      layer2Loaded = true;
+      if (layer1Loaded && !initialSetupDone) {
+        initialDrawAndSetup();
+      }
+    });
 
-  // Draw the night overlay on ctx2
-  ctx2.fillStyle = 'rgba(0, 0, 50, 0.3)';
-  ctx2.fillRect(0, 0, logicalWidth2, logicalHeight2);
+    function drawImageCover(ctx, img, canvas) {
+      if (!ctx || !img || !canvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const canvasLogicalWidth = canvas.width / dpr;
+      const canvasLogicalHeight = canvas.height / dpr;
 
-  updateRain(canvas2);
-  drawRain(ctx2); // Pass only ctx2 as it's already scaled
+      const imgWidth = img.width;
+      const imgHeight = img.height;
 
-  animationFrameId = requestAnimationFrame(animate);
-}
+      const scaleX = canvasLogicalWidth / imgWidth;
+      const scaleY = canvasLogicalHeight / imgHeight;
+      const scale = Math.max(scaleX, scaleY);
 
-function resizeAndDraw() {
-  const container = document.querySelector('.canvas-container');
-  const dpr = window.devicePixelRatio || 1;
+      const drawWidth = imgWidth * scale;
+      const drawHeight = imgHeight * scale;
 
-  // Set canvas dimensions based on container size
-  [canvas1, canvas2, canvas3].forEach(canvas => {
-    canvas.width = container.clientWidth * dpr;
-    canvas.height = container.clientHeight * dpr;
-    canvas.style.width = container.clientWidth + 'px';
-    canvas.style.height = container.clientHeight + 'px';
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr); // Scale once after setting dimensions
-  });
+      const offsetX = (canvasLogicalWidth - drawWidth) / 2;
+      const offsetY = (canvasLogicalHeight - drawHeight) / 2;
 
-  // Initialize or re-initialize rain for canvas2
-  initRain(canvas2);
+      ctx.clearRect(0, 0, canvasLogicalWidth, canvasLogicalHeight);
+      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+    }
 
-  // Draw images
-  if (bgLayer1Loaded) {
-    drawImageCover(ctx1, img1, canvas1); // Pass canvas itself to drawImageCover
+    function animate() {
+      if (!canvas2 || !ctx2) return;
+      const dpr = window.devicePixelRatio || 1;
+      const logicalWidth2 = canvas2.width / dpr;
+      const logicalHeight2 = canvas2.height / dpr;
+
+      ctx2.clearRect(0, 0, logicalWidth2, logicalHeight2);
+      ctx2.fillStyle = 'rgba(0, 0, 50, 0.3)';
+      ctx2.fillRect(0, 0, logicalWidth2, logicalHeight2);
+
+      if (themeKey === "cafe") {
+        updateRainState();
+        drawRainOnCanvas(ctx2);
+        drawLightning(ctx2);
+      } else if (themeKey === "night") {
+        // Add meteors for night theme
+        updateMeteorsState();
+        drawMeteorsOnCanvas(ctx2);
+        // Optionally, keep rain and lightning for night theme too, or make them exclusive
+        // updateRainState(); // If you want rain too
+        // drawRainOnCanvas(ctx2); // If you want rain too
+        // drawLightning(ctx2); // If you want lightning too
+      }
+
+      animationFrameId = requestAnimationFrame(animate);
+    }
+
+    function resizeAndDraw() {
+      const container = document.querySelector('.canvas-container');
+      if (!container) return;
+      const dpr = window.devicePixelRatio || 1;
+
+      [canvas1, canvas2, canvas3].forEach(canvas => {
+        if (!canvas) return;
+        canvas.width = container.clientWidth * dpr;
+        canvas.height = container.clientHeight * dpr;
+        canvas.style.width = container.clientWidth + 'px';
+        canvas.style.height = container.clientHeight + 'px';
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.scale(dpr, dpr);
+        }
+      });
+
+      // Conditional initialization of rain and lightning based on theme
+      if (canvas2) { // Ensure canvas2 exists for these effects
+        if (themeKey === "cafe") {
+          initializeRain(canvas2);
+          initializeLightning(canvas2); // Initialize and start scheduling lightning
+          clearMeteors(); // Ensure meteors are cleared if switching from a theme that had them
+        } else if (themeKey === "night") {
+          initializeMeteors(canvas2); // Initialize 15 meteors for the night theme
+          // Optionally, initialize rain and lightning for night theme as well
+          // initializeRain(canvas2);
+          // initializeLightning(canvas2);
+        } else {
+          // If not 'cafe' or 'night', ensure all effects are cleared.
+          clearLightning();
+          clearMeteors(); // Clear meteors for other themes
+          // Potentially clear rain if it's not a default effect
+        }
+      }
+
+      // Draw current images for layer1 and layer2
+      if (layer1Loaded && ctx1 && layer1Images.length > 0 && layer1Images[currentLayer1Index]) {
+        drawImageCover(ctx1, layer1Images[currentLayer1Index], canvas1);
+      }
+      if (layer2Loaded && ctx3 && layer2Images.length > 0 && layer2Images[currentLayer2Index]) {
+        drawImageCover(ctx3, layer2Images[currentLayer2Index], canvas3); // canvas3 is layer 2
+      }
+
+      // Start rain animation if not already started and layers are loaded
+      if (!animationFrameId && layer1Loaded && layer2Loaded && canvas2) {
+        animate();
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      // Ensure canvases exist before trying to resize - this check is good
+      if (canvas1 && canvas2 && canvas3) {
+        resizeAndDraw();
+      }
+    });
+
+    // Initial call to resizeAndDraw and animate is now handled by initialDrawAndSetup
+    // which is triggered by image loading callbacks. So the old block here is removed.
+
+  } else {
+    console.warn("One or more canvas elements not found. Canvas animations disabled.");
   }
-  // Layer 2 is intentionally left blank for now.
-
-  if (bgLayer2Loaded) {
-    drawImageCover(ctx3, img3, canvas3); // Pass canvas itself to drawImageCover
-  }
-
-  // Animation loop handles drawing on ctx2 (overlay and rain)
-  // If animation is not running, start it.
-  // This check is also in onload, but good to have here for direct resize calls if any.
-  if (!animationFrameId && bgLayer1Loaded && bgLayer2Loaded) {
-    animate();
-  }
-}
-
-// Initial draw and animation start will be triggered by image loads
-
-// Adjust canvas on window resize
-window.addEventListener('resize', () => {
-  // Stop existing animation before re-initializing, to avoid potential issues.
-  // Though, initRain and the continuous loop should handle it gracefully.
-  // if (animationFrameId) {
-  //   cancelAnimationFrame(animationFrameId);
-  //   animationFrameId = null; 
-  // }
-  resizeAndDraw();
 }); 
