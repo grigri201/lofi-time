@@ -2,248 +2,330 @@ import { initializeRain, updateRainState, drawRainOnCanvas, initializeLightning,
 import { initializeMeteors, updateMeteorsState, drawMeteorsOnCanvas, clearMeteors } from './meteor.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
-  let config;
+  let fullConfig;
   try {
     const response = await fetch('./config.json');
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    config = await response.json();
+    fullConfig = await response.json();
   } catch (error) {
     console.error("Failed to load config.json:", error);
-    // Fallback or disable canvas features if config is essential
     return;
   }
 
-  // Determine which theme/key to use from config.json
-  const themeKey = "night";
-  const themeConfig = config[themeKey];
-
-  // Validate themeConfig and essential paths
-  if (!themeConfig ||
-    !themeConfig.layer1 || !Array.isArray(themeConfig.layer1) || themeConfig.layer1.length === 0 ||
-    !themeConfig.layer2 || !Array.isArray(themeConfig.layer2) || themeConfig.layer2.length === 0) {
-    console.error(`Theme '${themeKey}' in config.json is missing layer1/layer2 arrays, or they are empty, or essential image paths are missing.`);
-    return;
+  const audio = document.getElementById('myAudio');
+  if (audio) {
+    // Attempt to play the audio
+    // Autoplay might be blocked by browser policies, 
+    // especially if the user hasn't interacted with the page yet.
+    // Using a timeout can sometimes help, but it's not a guaranteed solution.
+    setTimeout(() => {
+      audio.play().catch(error => {
+        console.log("Autoplay was prevented:", error);
+        // Optionally, you could show a play button or a message to the user.
+      });
+    }, 100); // Small delay
   }
 
-  const layer1ImagePaths = themeConfig.layer1;
-  const layer2ImagePaths = themeConfig.layer2; // for canvas3
+  const themes = ["night", "cafe"]; // Available themes
+  let currentThemeIndex = 0; // Start with "night"
+  let themeKey = themes[currentThemeIndex];
 
-  const layer1TransformInterval = themeConfig.layer1_transform_interval || 0;
-  // const layer1TransformDuration = themeConfig.layer1_transform_duration || 0; // Parsed but not used for visual transition in this version
-  const layer2TransformInterval = themeConfig.layer2_transform_interval || 0;
-  // const layer2TransformDuration = themeConfig.layer2_transform_duration || 0; // Parsed but not used for visual transition in this version
-
-  // Moved Canvas related code inside DOMContentLoaded
+  // Canvas elements and contexts (scoped to be accessible by applyTheme)
   const canvas1 = document.getElementById('canvas-layer1');
   const canvas2 = document.getElementById('canvas-layer2');
   const canvas3 = document.getElementById('canvas-layer3');
+  let ctx1, ctx2, ctx3;
 
-  // Only proceed with canvas setup if all canvases are found
-  if (canvas1 && canvas2 && canvas3) {
-    const ctx1 = canvas1.getContext('2d');
-    const ctx2 = canvas2.getContext('2d');
-    const ctx3 = canvas3.getContext('2d');
+  if (!canvas1 || !canvas2 || !canvas3) {
+    console.warn("One or more canvas elements not found. Canvas animations disabled.");
+    return;
+  }
 
-    // Image arrays, current indices, and loaded status
-    let layer1Images = [];
-    let currentLayer1Index = 0;
-    let layer1Loaded = false;
+  ctx1 = canvas1.getContext('2d');
+  ctx2 = canvas2.getContext('2d');
+  ctx3 = canvas3.getContext('2d');
 
-    let layer2Images = []; // For canvas3 (formerly img3)
-    let currentLayer2Index = 0;
-    let layer2Loaded = false; // For canvas3 images
+  // Image arrays, current indices, and loaded status
+  let layer1Images = [];
+  let currentLayer1Index = 0;
+  let layer1Loaded = false;
 
-    let initialSetupDone = false; // Flag to ensure initial setup runs once
+  let layer2Images = []; // For canvas3
+  let currentLayer2Index = 0;
+  let layer2Loaded = false;
 
-    let animationFrameId = null;
+  let initialSetupDone = false;
+  let animationFrameId = null;
+  let slideshowIntervalLayer1 = null;
+  let slideshowIntervalLayer2 = null;
 
-    function loadLayerImages(paths, imageArray, onAllLoadedCallback) {
-      let loadedCount = 0;
-      if (!paths || paths.length === 0) {
-        onAllLoadedCallback(); // No images to load
-        return;
-      }
-      // Ensure imageArray is cleared or correctly sized if re-using
-      imageArray.length = 0;
-      paths.forEach((path, index) => {
-        const img = new Image();
-        img.onload = () => {
-          loadedCount++;
-          if (loadedCount === paths.length) {
-            onAllLoadedCallback();
-          }
-        };
-        img.onerror = () => {
-          console.error(`Failed to load image: ${path}`);
-          // Optionally, count as loaded to not block indefinitely, or handle error
-          loadedCount++;
-          if (loadedCount === paths.length) {
-            onAllLoadedCallback();
-          }
-        };
-        img.src = path;
-        imageArray[index] = img;
-      });
+  function loadLayerImages(paths, imageArray, onAllLoadedCallback) {
+    let loadedCount = 0;
+    imageArray.length = 0; // Clear previous images
+    if (!paths || paths.length === 0) {
+      onAllLoadedCallback();
+      return;
     }
-
-    function initialDrawAndSetup() {
-      if (initialSetupDone) return;
-      initialSetupDone = true;
-
-      resizeAndDraw(); // Draws initial images based on current indices (0)
-
-      if (!animationFrameId && canvas2) { // Start rain animation on canvas2
-        animate();
-      }
-
-      // Start slideshow for layer 1 (canvas1)
-      if (layer1Images.length > 1 && layer1TransformInterval > 0 && ctx1) {
-        setInterval(() => {
-          currentLayer1Index = (currentLayer1Index + 1) % layer1Images.length;
-          if (layer1Images[currentLayer1Index]) {
-            drawImageCover(ctx1, layer1Images[currentLayer1Index], canvas1);
-          }
-        }, layer1TransformInterval);
-      }
-
-      // Start slideshow for layer 2 (canvas3)
-      if (layer2Images.length > 1 && layer2TransformInterval > 0 && ctx3) {
-        setInterval(() => {
-          currentLayer2Index = (currentLayer2Index + 1) % layer2Images.length;
-          if (layer2Images[currentLayer2Index]) {
-            drawImageCover(ctx3, layer2Images[currentLayer2Index], canvas3);
-          }
-        }, layer2TransformInterval);
-      }
-    }
-
-    loadLayerImages(layer1ImagePaths, layer1Images, () => {
-      layer1Loaded = true;
-      if (layer2Loaded && !initialSetupDone) {
-        initialDrawAndSetup();
-      }
+    paths.forEach((path, index) => {
+      const img = new Image();
+      img.onload = () => {
+        loadedCount++;
+        if (loadedCount === paths.length) {
+          onAllLoadedCallback();
+        }
+      };
+      img.onerror = () => {
+        console.error(`Failed to load image: ${path}`);
+        loadedCount++;
+        if (loadedCount === paths.length) {
+          onAllLoadedCallback();
+        }
+      };
+      img.src = path;
+      imageArray[index] = img;
     });
+  }
 
-    loadLayerImages(layer2ImagePaths, layer2Images, () => { // For canvas3
-      layer2Loaded = true;
-      if (layer1Loaded && !initialSetupDone) {
-        initialDrawAndSetup();
-      }
-    });
+  function drawImageCover(ctx, img, canvas) {
+    if (!ctx || !img || !canvas) return;
+    // DPR handling remains the same
+    const dpr = window.devicePixelRatio || 1;
+    const canvasLogicalWidth = canvas.width / dpr;
+    const canvasLogicalHeight = canvas.height / dpr;
 
-    function drawImageCover(ctx, img, canvas) {
-      if (!ctx || !img || !canvas) return;
-      const dpr = window.devicePixelRatio || 1;
-      const canvasLogicalWidth = canvas.width / dpr;
-      const canvasLogicalHeight = canvas.height / dpr;
+    const imgWidth = img.width;
+    const imgHeight = img.height;
 
-      const imgWidth = img.width;
-      const imgHeight = img.height;
+    const scaleX = canvasLogicalWidth / imgWidth;
+    const scaleY = canvasLogicalHeight / imgHeight;
+    const scale = Math.max(scaleX, scaleY);
 
-      const scaleX = canvasLogicalWidth / imgWidth;
-      const scaleY = canvasLogicalHeight / imgHeight;
-      const scale = Math.max(scaleX, scaleY);
+    const drawWidth = imgWidth * scale;
+    const drawHeight = imgHeight * scale;
 
-      const drawWidth = imgWidth * scale;
-      const drawHeight = imgHeight * scale;
+    const offsetX = (canvasLogicalWidth - drawWidth) / 2;
+    const offsetY = (canvasLogicalHeight - drawHeight) / 2;
 
-      const offsetX = (canvasLogicalWidth - drawWidth) / 2;
-      const offsetY = (canvasLogicalHeight - drawHeight) / 2;
+    ctx.clearRect(0, 0, canvasLogicalWidth, canvasLogicalHeight); // Clear before drawing
+    ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+  }
 
-      ctx.clearRect(0, 0, canvasLogicalWidth, canvasLogicalHeight);
-      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+  function animate() {
+    if (!canvas2 || !ctx2) return; // Check moved from inside
+    const dpr = window.devicePixelRatio || 1;
+    const logicalWidth2 = canvas2.width / dpr;
+    const logicalHeight2 = canvas2.height / dpr;
+
+    ctx2.clearRect(0, 0, logicalWidth2, logicalHeight2);
+    // Background fill might change based on theme, or be removed if layers cover it
+    // ctx2.fillStyle = 'rgba(0, 0, 50, 0.3)'; // Example, can be theme-dependent
+    // ctx2.fillRect(0, 0, logicalWidth2, logicalHeight2);
+
+    // Theme-specific animations
+    const currentThemeConfig = fullConfig[themeKey]; // Get current theme config for animation details
+    if (currentThemeConfig.effects && currentThemeConfig.effects.rain) {
+      updateRainState();
+      drawRainOnCanvas(ctx2);
     }
-
-    function animate() {
-      if (!canvas2 || !ctx2) return;
-      const dpr = window.devicePixelRatio || 1;
-      const logicalWidth2 = canvas2.width / dpr;
-      const logicalHeight2 = canvas2.height / dpr;
-
-      ctx2.clearRect(0, 0, logicalWidth2, logicalHeight2);
-      ctx2.fillStyle = 'rgba(0, 0, 50, 0.3)';
-      ctx2.fillRect(0, 0, logicalWidth2, logicalHeight2);
-
-      if (themeKey === "cafe") {
-        updateRainState();
-        drawRainOnCanvas(ctx2);
-        drawLightning(ctx2);
-      } else if (themeKey === "night") {
-        // Add meteors for night theme
-        updateMeteorsState();
-        drawMeteorsOnCanvas(ctx2);
-        // Optionally, keep rain and lightning for night theme too, or make them exclusive
-        // updateRainState(); // If you want rain too
-        // drawRainOnCanvas(ctx2); // If you want rain too
-        // drawLightning(ctx2); // If you want lightning too
-      }
-
-      animationFrameId = requestAnimationFrame(animate);
+    if (currentThemeConfig.effects && currentThemeConfig.effects.lightning) {
+      drawLightning(ctx2);
     }
+    if (currentThemeConfig.effects && currentThemeConfig.effects.meteors) {
+      updateMeteorsState();
+      drawMeteorsOnCanvas(ctx2);
+    }
+    // Fallback if no effects defined or to ensure canvas is cleared
+    // else { 
+    //    ctx2.clearRect(0, 0, logicalWidth2, logicalHeight2);
+    // }
 
-    function resizeAndDraw() {
-      const container = document.querySelector('.canvas-container');
-      if (!container) return;
-      const dpr = window.devicePixelRatio || 1;
 
-      [canvas1, canvas2, canvas3].forEach(canvas => {
-        if (!canvas) return;
-        canvas.width = container.clientWidth * dpr;
-        canvas.height = container.clientHeight * dpr;
+    animationFrameId = requestAnimationFrame(animate);
+  }
+
+  function resizeAndDraw() {
+    const container = document.querySelector('.canvas-container');
+    if (!container) return;
+    const dpr = window.devicePixelRatio || 1;
+
+    [canvas1, canvas2, canvas3].forEach(canvas => {
+      if (!canvas) return;
+      const oldWidth = canvas.width;
+      const oldHeight = canvas.height;
+      const newWidth = container.clientWidth * dpr;
+      const newHeight = container.clientHeight * dpr;
+
+      if (oldWidth !== newWidth || oldHeight !== newHeight) {
+        canvas.width = newWidth;
+        canvas.height = newHeight;
         canvas.style.width = container.clientWidth + 'px';
         canvas.style.height = container.clientHeight + 'px';
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          ctx.scale(dpr, dpr);
+          ctx.scale(dpr, dpr); // Rescale context if canvas size changed
         }
-      });
-
-      // Conditional initialization of rain and lightning based on theme
-      if (canvas2) { // Ensure canvas2 exists for these effects
-        if (themeKey === "cafe") {
-          initializeRain(canvas2);
-          initializeLightning(canvas2); // Initialize and start scheduling lightning
-          clearMeteors(); // Ensure meteors are cleared if switching from a theme that had them
-        } else if (themeKey === "night") {
-          initializeMeteors(canvas2); // Initialize 15 meteors for the night theme
-          // Optionally, initialize rain and lightning for night theme as well
-          // initializeRain(canvas2);
-          // initializeLightning(canvas2);
-        } else {
-          // If not 'cafe' or 'night', ensure all effects are cleared.
-          clearLightning();
-          clearMeteors(); // Clear meteors for other themes
-          // Potentially clear rain if it's not a default effect
-        }
-      }
-
-      // Draw current images for layer1 and layer2
-      if (layer1Loaded && ctx1 && layer1Images.length > 0 && layer1Images[currentLayer1Index]) {
-        drawImageCover(ctx1, layer1Images[currentLayer1Index], canvas1);
-      }
-      if (layer2Loaded && ctx3 && layer2Images.length > 0 && layer2Images[currentLayer2Index]) {
-        drawImageCover(ctx3, layer2Images[currentLayer2Index], canvas3); // canvas3 is layer 2
-      }
-
-      // Start rain animation if not already started and layers are loaded
-      if (!animationFrameId && layer1Loaded && layer2Loaded && canvas2) {
-        animate();
-      }
-    }
-
-    window.addEventListener('resize', () => {
-      // Ensure canvases exist before trying to resize - this check is good
-      if (canvas1 && canvas2 && canvas3) {
-        resizeAndDraw();
       }
     });
 
-    // Initial call to resizeAndDraw and animate is now handled by initialDrawAndSetup
-    // which is triggered by image loading callbacks. So the old block here is removed.
+    const currentThemeConfig = fullConfig[themeKey]; // Use current theme config
 
-  } else {
-    console.warn("One or more canvas elements not found. Canvas animations disabled.");
+    // (Re)-initialize effects based on the current theme.
+    // Clear all potential effects first
+    clearLightning();
+    clearMeteors();
+    // rain.js might need a clearRain() function if rain elements persist.
+    // For now, assume re-initializing is enough or not needed if theme doesn't use it.
+
+    if (currentThemeConfig.effects) {
+      if (currentThemeConfig.effects.rain && canvas2) {
+        initializeRain(canvas2);
+      }
+      if (currentThemeConfig.effects.lightning && canvas2) {
+        initializeLightning(canvas2);
+      }
+      if (currentThemeConfig.effects.meteors && canvas2) {
+        initializeMeteors(canvas2); // Assuming 15 meteors or make it configurable
+      }
+    }
+
+
+    // Draw current images for layer1 and layer2
+    if (layer1Loaded && ctx1 && layer1Images.length > 0 && layer1Images[currentLayer1Index]) {
+      drawImageCover(ctx1, layer1Images[currentLayer1Index], canvas1);
+    }
+    if (layer2Loaded && ctx3 && layer2Images.length > 0 && layer2Images[currentLayer2Index]) {
+      drawImageCover(ctx3, layer2Images[currentLayer2Index], canvas3);
+    }
+
+    // Restart animation if it was stopped and layers are loaded
+    if (!animationFrameId && layer1Loaded && layer2Loaded && canvas2) {
+      animate();
+    }
   }
+
+  function initialDrawAndSetup() {
+    if (initialSetupDone) return;
+    initialSetupDone = true;
+
+    resizeAndDraw(); // Draws initial images and sets up effects
+
+    // Slideshows are now managed by applyTheme to ensure they use correct intervals
+    // and are cleared/restarted on theme change.
+    // The animate() call is also handled within resizeAndDraw or applyTheme context.
+  }
+
+  async function applyTheme(newThemeKey) {
+    themeKey = newThemeKey;
+    const themeConfig = fullConfig[themeKey];
+
+    if (!themeConfig ||
+      !themeConfig.layer1 || !Array.isArray(themeConfig.layer1) ||
+      !themeConfig.layer2 || !Array.isArray(themeConfig.layer2)) {
+      console.error(`Theme '${themeKey}' in config.json is missing layer1/layer2 arrays, or they are empty.`);
+      return;
+    }
+
+    // Stop existing animations and intervals
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+    if (slideshowIntervalLayer1) {
+      clearInterval(slideshowIntervalLayer1);
+      slideshowIntervalLayer1 = null;
+    }
+    if (slideshowIntervalLayer2) {
+      clearInterval(slideshowIntervalLayer2);
+      slideshowIntervalLayer2 = null;
+    }
+
+    // Reset states
+    layer1Loaded = false;
+    layer2Loaded = false;
+    initialSetupDone = false; // Allow initialDrawAndSetup to run again for the new theme
+    currentLayer1Index = 0; // Reset image indices
+    currentLayer2Index = 0;
+
+    // Clear canvases (optional, as drawImageCover clears, but good for a clean slate)
+    if (ctx1) ctx1.clearRect(0, 0, canvas1.width / (window.devicePixelRatio || 1), canvas1.height / (window.devicePixelRatio || 1));
+    if (ctx2) ctx2.clearRect(0, 0, canvas2.width / (window.devicePixelRatio || 1), canvas2.height / (window.devicePixelRatio || 1));
+    if (ctx3) ctx3.clearRect(0, 0, canvas3.width / (window.devicePixelRatio || 1), canvas3.height / (window.devicePixelRatio || 1));
+
+
+    const layer1ImagePaths = themeConfig.layer1;
+    const layer2ImagePaths = themeConfig.layer2;
+    const layer1TransformInterval = themeConfig.layer1_transform_interval || 0;
+    const layer2TransformInterval = themeConfig.layer2_transform_interval || 0;
+
+    const onAllImagesLoaded = () => {
+      if (layer1Loaded && layer2Loaded && !initialSetupDone) {
+        initialDrawAndSetup(); // This will call resizeAndDraw
+
+        // Restart slideshow for layer 1 (canvas1)
+        if (layer1Images.length > 1 && layer1TransformInterval > 0 && ctx1) {
+          slideshowIntervalLayer1 = setInterval(() => {
+            currentLayer1Index = (currentLayer1Index + 1) % layer1Images.length;
+            if (layer1Images[currentLayer1Index]) {
+              drawImageCover(ctx1, layer1Images[currentLayer1Index], canvas1);
+            }
+          }, layer1TransformInterval);
+        }
+
+        // Restart slideshow for layer 2 (canvas3)
+        if (layer2Images.length > 1 && layer2TransformInterval > 0 && ctx3) {
+          slideshowIntervalLayer2 = setInterval(() => {
+            currentLayer2Index = (currentLayer2Index + 1) % layer2Images.length;
+            if (layer2Images[currentLayer2Index]) {
+              drawImageCover(ctx3, layer2Images[currentLayer2Index], canvas3);
+            }
+          }, layer2TransformInterval);
+        }
+
+        // Ensure animation starts if conditions met (it's also in resizeAndDraw)
+        if (!animationFrameId && canvas2) {
+          animate();
+        }
+      }
+    };
+
+    loadLayerImages(layer1ImagePaths, layer1Images, () => {
+      layer1Loaded = true;
+      onAllImagesLoaded();
+    });
+
+    loadLayerImages(layer2ImagePaths, layer2Images, () => {
+      layer2Loaded = true;
+      onAllImagesLoaded();
+    });
+  }
+
+  // Initial theme application
+  applyTheme(themeKey);
+
+  // Event listeners for theme switching
+  const prevThemeBtn = document.getElementById('prevThemeBtn');
+  const nextThemeBtn = document.getElementById('nextThemeBtn');
+
+  if (prevThemeBtn) {
+    prevThemeBtn.addEventListener('click', () => {
+      currentThemeIndex = (currentThemeIndex - 1 + themes.length) % themes.length;
+      applyTheme(themes[currentThemeIndex]);
+    });
+  }
+
+  if (nextThemeBtn) {
+    nextThemeBtn.addEventListener('click', () => {
+      currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+      applyTheme(themes[currentThemeIndex]);
+    });
+  }
+
+  window.addEventListener('resize', () => {
+    if (canvas1 && canvas2 && canvas3) { // Ensure canvases exist
+      resizeAndDraw(); // resizeAndDraw now correctly uses the current themeKey
+    }
+  });
+
 }); 

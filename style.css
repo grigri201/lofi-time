@@ -39,7 +39,6 @@ canvas {
     bottom: 8px; /* Changed from 10px */
     left: 50%; /* Added for centering */
     transform: translateX(-50%); /* Added for centering */
-    width: min(80%, 260px); /* Changed from 100% */
     height: auto; /* Auto height based on content */
     min-height: 60px; /* Minimum height */
     background-color: rgba(0, 0, 0, 0.8); /* Adjusted base background color */
@@ -200,4 +199,36 @@ canvas {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+}
+
+.theme-btn {
+    color: #fff; /* Optional: slightly change icon color on hover */
+    position: fixed;
+    opacity: 0.1;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 100vh; /* Increased height */
+    width: 40px; /* Added width for hit area and centering */
+    padding: 0; /* Removed padding, using flex for centering */
+    background-color: transparent; /* Changed to transparent */
+    border: none; /* Removed border */
+    border-radius: 0; /* Removed border-radius */
+    cursor: pointer;
+    z-index: 1001; 
+    font-size: 30px; /* Increased icon size */
+    display: flex; /* Added for centering content */
+    align-items: center; /* Added for centering content */
+    justify-content: center; /* Added for centering content */
+}
+
+#prevThemeBtn {
+    left: 8px; /* Stick to left edge */
+}
+
+#nextThemeBtn {
+    right: 8px; /* Stick to right edge */
+}
+
+.theme-btn:hover {
+    opacity: 0.5;
 } 

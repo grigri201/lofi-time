@@ -10,16 +10,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const nextBtn = document.getElementById('nextBtn'); // Get the next button
 
   const playlist = [
-    './assets/bgm/coffee-lofi-chill-lofi-music-332738.mp3',
-    './assets/bgm/lofi-coffee-332824.mp3',
-    './assets/bgm/rainy-lofi-city-lofi-music-332746.mp3'
+    { name: 'Chill lofi', url: 'http://usa9.fastcast4u.com/proxy/jamz?mp=/1' },
+    { name: 'Sovietwave', url: 'https://station.waveradio.org/soviet.mp3' },
+    { name: 'Psyndora Chillout', url: 'http://cast.magicstreams.gr:9125/stream' },
+    { name: 'Classic Vinyl', url: 'https://icecast.walmradio.com:8443/classic' },
+    { name: 'Adroit Jazz Underground', url: 'https://icecast.walmradio.com:8443/jazz' },
+    { name: 'Intense Radio - We love Dance', url: 'http://secure.live-streams.nl/flac.ogg' },
+    { name: 'progressive techno', url: 'https://0n-techno.radionetz.de/0n-techno.mp3' },
+    { name: 'Dance', url: 'https://mixtapes.superstreams.de' },
+    { name: 'Anima Amoris Minimal Deep Techno', url: 'https://amoris.sknt.ru/minimal.mp3' },
+    { name: 'CoreTime.FM', url: 'https://listen.coretime.fm/aac-hd.pls' },
+    { name: 'acid', url: 'https://streams.rautemusik.fm/techno/mp3-192' },
+    { name: 'Trancetechnic Radio', url: 'https://s11.ssl-stream.com/ssl/trancete?mp=/stream' },
+    { name: 'Chillsky Beats', url: 'https://lfhh.radioca.st/stream' }
   ];
   let currentTrackIndex = 0;
 
   // Function to load and play a track
   function loadTrack(trackIndex) {
     if (trackIndex >= 0 && trackIndex < playlist.length) {
-      audio.src = playlist[trackIndex];
+      audio.src = playlist[trackIndex].url;
       audio.load(); // Important to load the new source
       // Attempt to play if isPlaying was true, or if user clicks play next
       if (isPlaying) {
@@ -34,13 +44,13 @@ document.addEventListener('DOMContentLoaded', () => {
       updatePlayPauseIcon();
       // Optionally, reset to first track or stop
       // currentTrackIndex = 0; 
-      // audio.src = playlist[currentTrackIndex];
+      // audio.src = playlist[currentTrackIndex].url;
     }
   }
 
   // Set initial track
   if (playlist.length > 0) {
-    audio.src = playlist[currentTrackIndex];
+    audio.src = playlist[currentTrackIndex].url;
   }
 
   audio.addEventListener('loadedmetadata', () => {
@@ -52,6 +62,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // For more detailed metadata, you might need a library like jsmediatags
     console.log('Current Source:', audio.currentSrc);
     updateSongTitleDisplay(); // Update title display when metadata is loaded
+  });
+
+  // Handle audio errors by trying the next track
+  audio.addEventListener('error', (e) => {
+    console.error("Audio Error:", e);
+    console.log("Attempting to play next track due to error.");
+    currentTrackIndex++;
+    if (currentTrackIndex >= playlist.length) {
+      currentTrackIndex = 0; // Loop back to the first track
+    }
+    // Preserve the previous playing state
+    const wasPlaying = isPlaying;
+    loadTrack(currentTrackIndex);
+    if (wasPlaying) {
+      // Ensure playback attempts if it was previously playing
+      // loadTrack might already attempt to play if isPlaying is true,
+      // but this ensures it if loadTrack's internal play was conditional
+      // or if isPlaying was modified by the error or loadTrack itself.
+      audio.play().catch(error => console.error("Error attempting to play next track after an error:", error));
+    }
+    // No need to update isPlaying or icon here, as loadTrack and play() will handle it
+    // or it remains paused if it was paused.
   });
 
   let isPlaying = false;
@@ -67,14 +99,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Helper function to update the song title display
   function updateSongTitleDisplay() {
-    if (!audio.currentSrc) return; // Do nothing if no source
+    if (!audio.currentSrc || currentTrackIndex < 0 || currentTrackIndex >= playlist.length) return; // Do nothing if no source or invalid index
 
-    let displayName = audio.title;
+    let displayName = playlist[currentTrackIndex].name;
     if (!displayName || displayName.trim() === "") {
+      // Fallback if name is empty, though it shouldn't be with the new structure
       const pathParts = audio.currentSrc.split('/');
       displayName = pathParts[pathParts.length - 1]; // Get filename from path
-      // Optionally remove extension for display
-      // displayName = displayName.substring(0, displayName.lastIndexOf('.')) || displayName;
     }
     songTitleDisplay.textContent = displayName;
   }
@@ -96,8 +127,8 @@ document.addEventListener('DOMContentLoaded', () => {
       audio.pause();
     } else {
       // If changing track or starting for the first time, ensure src is set
-      if (audio.currentSrc !== playlist[currentTrackIndex] && playlist.length > 0) {
-        audio.src = playlist[currentTrackIndex];
+      if (audio.currentSrc !== playlist[currentTrackIndex].url && playlist.length > 0) {
+        audio.src = playlist[currentTrackIndex].url;
         audio.load();
       }
       audio.play().catch(error => console.error("Error attempting to play audio:", error));
