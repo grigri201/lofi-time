@@ -78,6 +78,16 @@ canvas {
     align-items: center;
 }
 
+.pomodoro-btn {
+    width: 60px;
+    height: 60px;
+    font-size: 18px;
+    color: #fff;
+    background-color: #c0392b;
+    border-radius: 50%;
+    margin-right: 15px;
+}
+
 .control-btn div[class^="icon-"] {
     height: 100%;
     width: 100%;
