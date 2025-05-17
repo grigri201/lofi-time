@@ -1,9 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 
 const playlist = [
-  { name: 'Chill lofi', url: 'http://usa9.fastcast4u.com/proxy/jamz?mp=/1' },
-  { name: 'Sovietwave', url: 'https://station.waveradio.org/soviet.mp3' },
-  { name: 'Psyndora Chillout', url: 'http://cast.magicstreams.gr:9125/stream' }
+  { name: "Chill lofi", url: "https://usa9.fastcast4u.com/proxy/jamz?mp=/1" },
 ];
 
 export const AudioPlayer: React.FC = () => {
@@ -36,8 +34,12 @@ export const AudioPlayer: React.FC = () => {
     <div className="audio-container">
       <audio ref={audioRef} preload="metadata" />
       <div className="song-title">{playlist[trackIndex].name}</div>
-      <button className="control-btn" onClick={playPause} aria-label="Play/Pause">
-        <div className={isPlaying ? 'icon-pause' : 'icon-play'} />
+      <button
+        className="control-btn"
+        onClick={playPause}
+        aria-label="Play/Pause"
+      >
+        <div className={isPlaying ? "icon-pause" : "icon-play"} />
       </button>
       <button className="control-btn" onClick={next} aria-label="Next Song">
         <div className="icon-next" />
