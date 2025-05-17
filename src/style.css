@@ -34,182 +34,36 @@ canvas {
     z-index: 1; /* Bottom layer */
 }
 
-.audio-container {
+
+.pomodoro-btn {
     position: fixed;
-    bottom: 8px; /* Changed from 10px */
-    left: 50%; /* Added for centering */
-    transform: translateX(-50%); /* Added for centering */
-    height: auto; /* Auto height based on content */
-    min-height: 60px; /* Minimum height */
-    background-color: rgba(0, 0, 0, 0.8); /* Adjusted base background color */
-    border-radius: 12px; /* Added for rounded corners */
-    display: flex; /* Enable flexbox for centering */
-    align-items: center; /* Vertically center controls */
-    padding: 10px 15px; /* Adjusted padding slightly */
-    box-sizing: border-box; /* Ensure padding doesn't add to the total width/height */
-    z-index: 10; /* Ensure audio player is above canvases */
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: #ffffff;
-    box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.3); /* Added a subtle shadow for depth */
-    opacity: 0.5; /* Default overall opacity */
-    transition: opacity 300ms ease; /* Transition for opacity hover effect */
-}
-
-.audio-container:hover {
-    opacity: 1; /* Overall opacity 1 on hover */
-}
-
-/* Hide the actual audio element as we are creating custom controls */
-#myAudio {
-    display: none;
-}
-
-.control-btn {
-    height: 32px;
-    width: 32px;
-    cursor: pointer;
-    margin-right: 15px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 300px;
+    height: 300px;
+    font-size: 48px;
+    color: #fff;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
     border: none;
-    background-color: transparent;
-    padding: 0;
-    outline: none;
     display: flex;
     justify-content: center;
     align-items: center;
+    cursor: pointer;
+    z-index: 1000;
+    transition: all 300ms ease;
 }
 
-.pomodoro-btn {
+.pomodoro-btn.running {
+    top: auto;
+    bottom: 20px;
+    transform: translate(-50%, 0);
     width: 60px;
     height: 60px;
     font-size: 18px;
-    color: #fff;
-    background-color: #c0392b;
-    border-radius: 50%;
-    margin-right: 15px;
 }
 
-.control-btn div[class^="icon-"] {
-    height: 100%;
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 20px; /* Adjust icon size */
-    color: #ffffff;
-}
-
-/* Style for play icon (e.g., using Unicode or a background image) */
-.icon-play::before {
-    content: '\25B6'; /* Unicode Play Symbol: ▶ */
-    /* Example with image: 
-    content: '';
-    background-image: url('path/to/play-icon.svg');
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: contain;
-    display: block;
-    width: 100%;
-    height: 100%;
-    */
-}
-
-/* Style for pause icon */
-.icon-pause::before {
-    content: '\23F8'; /* Unicode Pause Symbol: ⏸ */
-     /* Example with image: 
-    content: '';
-    background-image: url('path/to/pause-icon.svg');
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: contain;
-    display: block;
-    width: 100%;
-    height: 100%;
-    */
-}
-
-/* Style for next icon */
-.icon-next::before {
-    content: '\23ED'; /* Unicode Next Track Symbol: ⏭ */
-    /* Example with image: 
-    content: '';
-    background-image: url('path/to/next-icon.svg');
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: contain;
-    display: block;
-    width: 100%;
-    height: 100%;
-    */
-}
-
-.time-display {
-    font-size: 13px;
-    color: #e0e0e0;
-    min-width: 45px; /* To prevent layout shifts */
-    text-align: center;
-    user-select: none;
-}
-
-#currentTimeDisplay {
-    margin-right: 10px;
-}
-
-#totalTimeDisplay {
-    margin-left: 10px;
-}
-
-.progress-bar-track {
-    position: relative; /* For positioning thumb and played progress */
-    flex-grow: 1;
-    height: 6px;
-    background-color: rgba(255, 255, 255, 0.25);
-    border-radius: 3px;
-    cursor: pointer;
-    margin: 0 5px; /* Small margin if times are outside */
-}
-
-.progress-bar-played {
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    width: 0%; /* Initial width, updated by JS */
-    background-image: linear-gradient(90deg, #43b7fc 0%, #2080f7 93%);
-    border-radius: 3px;
-    pointer-events: none; /* Clicks should go to the track */
-}
-
-.progress-bar-thumb {
-    position: absolute;
-    top: 50%;
-    left: 0%; /* Initial position, updated by JS */
-    transform: translate(-50%, -50%); /* Center thumb on its 'left' position */
-    width: 14px;
-    height: 14px;
-    background-color: #ffffff;
-    border: 1px solid #2080f7; /* Matches article's border */
-    border-radius: 50%;
-    cursor: grab;
-    pointer-events: auto; /* Thumb itself is interactive */
-    z-index: 1; /* Above played progress but track click should still work */
-}
-
-.progress-bar-thumb:active {
-    cursor: grabbing;
-    box-shadow: 0 0 5px rgba(32, 128, 247, 0.7);
-}
-
-.progress-thumb-dot {
-    width: 6px;
-    height: 6px;
-    background-color: #7fbcff; /* Matches article */
-    border-radius: 50%;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-}
 
 .theme-btn {
     color: #fff; /* Optional: slightly change icon color on hover */
