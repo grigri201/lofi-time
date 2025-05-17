@@ -4,7 +4,7 @@ const playlist = [
   { name: "Chill lofi", url: "https://usa9.fastcast4u.com/proxy/jamz?mp=/1" },
 ];
 
-const INITIAL_TIME = 30; // 30 second pomodoro
+const INITIAL_TIME = 60 * 25; // 25 minutes
 
 export const AudioPlayer: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -13,9 +13,11 @@ export const AudioPlayer: React.FC = () => {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const fadeAnimRef = useRef<number | null>(null);
 
-  const fadeVolume = (from: number, to: number, duration = 200) => {
+  const fadeVolume = (from: number, to: number, duration = 500) => {
     const audio = audioRef.current;
-    if (!audio) return Promise.resolve();
+    if (!audio) {
+      return Promise.resolve();
+    }
     if (fadeAnimRef.current !== null) {
       cancelAnimationFrame(fadeAnimRef.current);
       fadeAnimRef.current = null;
@@ -24,7 +26,11 @@ export const AudioPlayer: React.FC = () => {
       const start = performance.now();
       const step = (now: number) => {
         const progress = Math.min((now - start) / duration, 1);
-        audio.volume = from + (to - from) * progress;
+        const newVolume = Math.min(
+          Math.max(from + (to - from) * progress, 0),
+          1
+        );
+        audio.volume = newVolume;
         if (progress < 1) {
           fadeAnimRef.current = requestAnimationFrame(step);
         } else {
@@ -86,7 +92,7 @@ export const AudioPlayer: React.FC = () => {
       stopTimer();
     } else {
       setIsPlaying(true);
-      setTimeout(startTimer, 300);
+      setTimeout(startTimer, 500);
     }
   };
 
