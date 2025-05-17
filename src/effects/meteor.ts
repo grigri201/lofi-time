@@ -1,36 +1,46 @@
-// meteor.js
+interface MeteorObj {
+  x: number;
+  y: number;
+  length: number;
+  speed: number;
+  angle: number;
+  opacity: number;
+  active: boolean;
+  reset: () => void;
+  update: () => void;
+  draw: (ctx: CanvasRenderingContext2D | null) => void;
+}
 
-// Array to store meteor objects
-let meteors = [];
+let meteors: MeteorObj[] = [];
 let canvasWidth = 0;
 let canvasHeight = 0;
-// User-defined: Default count, overridden by initializeMeteors if a new count is passed
 let meteorCount = Math.floor(Math.random() * 20) + 20;
 
 let meteorShowerActive = false;
-let meteorShowerStartTimeoutId = null;
-let meteorShowerEndTimeoutId = null;
+let meteorShowerStartTimeoutId: NodeJS.Timeout | null = null;
+let meteorShowerEndTimeoutId: NodeJS.Timeout | null = null;
 
-// Variables to manage shower dynamics
-let showerStartTime = null;
-let showerDuration = 0; // Duration of the current shower in ms
-
-// Variables for waiting logic
+let showerStartTime: number | null = null;
+let showerDuration = 0;
 let isWaitingForAllMeteorsToClear = false;
-let waitForClearanceFrameId = null;
+let waitForClearanceFrameId: number | null = null;
 
-/**
- * Represents a single meteor.
- */
-class Meteor {
+class Meteor implements MeteorObj {
+  x = 0;
+  y = 0;
+  length = 0;
+  speed = 0;
+  angle = Math.PI / 4;
+  opacity = 0;
+  active = true;
+
   constructor() {
     this.reset();
   }
 
   reset() {
     this.x = Math.random() * canvasWidth;
-    // User-defined: this.y starts further up
-    this.y = - (Math.random() * canvasHeight * 0.5 + 50);
+    this.y = -(Math.random() * canvasHeight * 0.5 + 50);
     this.length = Math.random() * 100 + 50;
     this.speed = Math.random() * 3 + 1;
     this.angle = Math.PI / 4;
@@ -47,7 +57,7 @@ class Meteor {
     }
   }
 
-  draw(ctx) {
+  draw(ctx: CanvasRenderingContext2D | null) {
     if (!this.active || !ctx) return;
     ctx.beginPath();
     ctx.moveTo(this.x, this.y);
@@ -77,15 +87,11 @@ function clearScheduledShowers() {
   meteorShowerStartTimeoutId = null;
   meteorShowerEndTimeoutId = null;
   meteorShowerActive = false;
-  stopWaitingForAllMeteorsToClear(); // Also stop the waiting process
+  stopWaitingForAllMeteorsToClear();
 }
 
 function checkAllMeteorsClearedLoop() {
-  if (!isWaitingForAllMeteorsToClear) {
-    // Waiting was cancelled (e.g., by clearMeteors or initializeMeteors)
-    return;
-  }
-
+  if (!isWaitingForAllMeteorsToClear) return;
   let allCleared = true;
   for (const meteor of meteors) {
     if (meteor.active) {
@@ -93,10 +99,9 @@ function checkAllMeteorsClearedLoop() {
       break;
     }
   }
-
   if (allCleared) {
     stopWaitingForAllMeteorsToClear();
-    scheduleNextShower(); // All meteors are off-screen, now schedule the next shower
+    scheduleNextShower();
   } else {
     waitForClearanceFrameId = requestAnimationFrame(checkAllMeteorsClearedLoop);
   }
@@ -105,7 +110,6 @@ function checkAllMeteorsClearedLoop() {
 function startCurrentMeteorShower() {
   meteorShowerActive = true;
   showerStartTime = Date.now();
-  // User-defined: Duration 20-30 seconds
   showerDuration = Math.random() * 10000 + 20000;
 
   meteors = [];
@@ -120,27 +124,25 @@ function startCurrentMeteorShower() {
 function endCurrentMeteorShower() {
   meteorShowerActive = false;
   showerStartTime = null;
-  // Shower active phase ended. Now wait for existing meteors to clear.
-  if (!isWaitingForAllMeteorsToClear) { // Prevent multiple checks if somehow triggered twice
+  if (!isWaitingForAllMeteorsToClear) {
     isWaitingForAllMeteorsToClear = true;
     checkAllMeteorsClearedLoop();
   }
 }
 
 function scheduleNextShower() {
-  stopWaitingForAllMeteorsToClear(); // Ensure any prior waiting state is cleared before scheduling
+  stopWaitingForAllMeteorsToClear();
   const interval = Math.random() * 8000 + 2000;
   if (meteorShowerStartTimeoutId) clearTimeout(meteorShowerStartTimeoutId);
   meteorShowerStartTimeoutId = setTimeout(startCurrentMeteorShower, interval);
 }
 
-export function initializeMeteors(canvas, count = meteorCount) {
+export function initializeMeteors(canvas: HTMLCanvasElement | null, count: number = meteorCount) {
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
   canvasWidth = canvas.width / dpr;
   canvasHeight = canvas.height / dpr;
-  // Use provided count, or the globally defined (randomized) meteorCount
-  meteorCount = count === undefined ? (Math.floor(Math.random() * 20) + 20) : count;
+  meteorCount = count === undefined ? Math.floor(Math.random() * 20) + 20 : count;
 
   clearScheduledShowers();
   meteors = [];
@@ -183,7 +185,7 @@ export function updateMeteorsState() {
   }
 }
 
-export function drawMeteorsOnCanvas(ctx) {
+export function drawMeteorsOnCanvas(ctx: CanvasRenderingContext2D | null) {
   if (!ctx) return;
   meteors.forEach(meteor => {
     meteor.draw(ctx);
@@ -193,4 +195,4 @@ export function drawMeteorsOnCanvas(ctx) {
 export function clearMeteors() {
   clearScheduledShowers();
   meteors = [];
-} 
+}
