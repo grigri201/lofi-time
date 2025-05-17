@@ -4,41 +4,60 @@ const playlist = [
   { name: "Chill lofi", url: "https://usa9.fastcast4u.com/proxy/jamz?mp=/1" },
 ];
 
+const INITIAL_TIME = 30; // 30 second pomodoro
+
 export const AudioPlayer: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [trackIndex, setTrackIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(30); // 30 second pomodoro
+  const [timeLeft, setTimeLeft] = useState(INITIAL_TIME);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const playPause = () => {
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60)
+      .toString()
+      .padStart(2, "0");
+    const s = (sec % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  const startTimer = () => {
     const audio = audioRef.current;
     if (!audio) return;
+    audio.play().catch(() => {});
+    timerRef.current = setInterval(() => {
+      setTimeLeft((t) => {
+        if (t <= 1) {
+          clearInterval(timerRef.current!);
+          timerRef.current = null;
+          audio.pause();
+          setIsPlaying(false);
+          setTimeout(() => setTimeLeft(INITIAL_TIME), 300);
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsPlaying(false);
+    setTimeout(() => setTimeLeft(INITIAL_TIME), 300);
+  };
+
+  const playPause = () => {
     if (isPlaying) {
-      audio.pause();
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      setTimeLeft(30);
-      setIsPlaying(false);
+      stopTimer();
     } else {
-      audio.play().catch(() => {});
       setIsPlaying(true);
-      setTimeLeft(30);
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = setInterval(() => {
-        setTimeLeft((t) => {
-          if (t <= 1) {
-            audio.pause();
-            setIsPlaying(false);
-            clearInterval(timerRef.current!);
-            timerRef.current = null;
-            return 30;
-          }
-          return t - 1;
-        });
-      }, 1000);
+      setTimeout(startTimer, 300);
     }
   };
 
@@ -53,20 +72,22 @@ export const AudioPlayer: React.FC = () => {
   };
 
   return (
-    <div className="audio-container">
+    <>
       <audio ref={audioRef} preload="metadata" />
-      <div className="song-title">{playlist[trackIndex].name}</div>
+      <div className="audio-container">
+        <div className="song-title">{playlist[trackIndex].name}</div>
+        <button className="control-btn" onClick={next} aria-label="Next Song">
+          <div className="icon-next" />
+        </button>
+      </div>
       <button
-        className="control-btn pomodoro-btn"
+        className={`pomodoro-btn ${isPlaying ? "running" : ""}`}
         onClick={playPause}
         aria-label="Pomodoro Timer"
       >
-        {isPlaying ? `${timeLeft}s` : "Start"}
+        {isPlaying ? formatTime(timeLeft) : "Start"}
       </button>
-      <button className="control-btn" onClick={next} aria-label="Next Song">
-        <div className="icon-next" />
-      </button>
-    </div>
+    </>
   );
 };
 
