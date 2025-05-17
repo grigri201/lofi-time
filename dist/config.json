@@ -1,13 +1,9 @@
 {
   "cafe": {
-    "layer1": [
-      "./assets/cafe/bg-layer1.png"
-    ],
+    "layer1": ["./assets/cafe/bg-layer1.png"],
     "layer1_transform_interval": 0,
     "layer1_transform_duration": 0,
-    "layer2": [
-      "./assets/cafe/bg-layer2.png"
-    ],
+    "layer2": ["./assets/cafe/bg-layer2.png"],
     "layer2_transform_interval": 0,
     "layer2_transform_duration": 0,
     "effects": {
@@ -17,14 +13,10 @@
     }
   },
   "night": {
-    "layer1": [
-      "./assets/night/bg-layer1-2.png"
-    ],
+    "layer1": ["./assets/night/bg-layer1-2.png"],
     "layer1_transform_interval": 0,
     "layer1_transform_duration": 0,
-    "layer2": [
-      "./assets/night/bg-layer2.png"
-    ],
+    "layer2": ["./assets/night/bg-layer2.png"],
     "layer2_transform_interval": 0,
     "layer2_transform_duration": 0,
     "effects": {
@@ -32,5 +24,5 @@
       "lightning": false,
       "meteors": true
     }
-  }
+  } 
 }
